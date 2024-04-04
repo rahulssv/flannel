@@ -6,40 +6,38 @@ on:
 
 env:
   GO_VERSION: "1.21"
-  LINUX_ARCHES: "amd64 arm arm64 s390x ppc64le riscv64"
-  REPOSITORY: flannel/flannel
+  LINUX_ARCHES: "ppc64le"
+  REPOSITORY: rahulssv/flannel
 
 jobs:
   build-and-push-images:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04-ppc64le
     permissions:
       contents: read
       packages: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: set tag 
         run: echo "GIT_TAG=$(git describe --tags --always)" >> $GITHUB_ENV
 
       - name: Set up Go 1.x
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
+          architecture: ${{ env.LINUX_ARCHES }}
 
       - name: go mod vendor
         run: go mod vendor
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v2
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v3
         with:
           images: ${{ env.REPOSITORY }}
           flavor: latest=false
@@ -47,19 +45,19 @@ jobs:
             type=ref,event=tag
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
         if: github.repository_owner == 'flannel-io' && success()
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v3
         with:
           context: .
           file: images/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64,linux/arm,linux/s390x,linux/ppc64le,linux/riscv64
+          platforms: linux/ppc64le
           tags: ${{ steps.meta.outputs.tags }}
           build-args: TAG=${{ env.GIT_TAG }}
 
@@ -68,7 +66,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04-ppc64le
     permissions:
       contents: write
       packages: write
@@ -77,18 +75,19 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Go 1.x
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
+          architecture: ${{ env.LINUX_ARCHES }}
 
       - name: go mod vendor
         run: go mod vendor
-      
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+
+      - name: Setup make
+        run: sudo apt install -qy make
 
       - name: Build release artifacts
         run: make release
@@ -107,13 +106,13 @@ jobs:
           jobs: build-and-push-images
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v3
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v2
         with:
           path: 'chart/'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v3
